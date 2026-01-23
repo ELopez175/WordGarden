@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AVFAudio
 
 struct ContentView: View {
     private static let maximumGuesses = 8 // need to rfer to this as self.maximumGuesses
@@ -23,8 +24,10 @@ struct ContentView: View {
     @State private var imageName = "flower8"
     @State private var playAgainHidden =  true
     @State private var playAgainButtonLabel = "Another Word?"
+    @State private var audioPlayer: AVAudioPlayer!
     @FocusState private var textFieldIsFocused: Bool
     private let wordsToGuess = ["SWIFT", "DOG", "CAT"] // All Caps
+    
     var body: some View {
         VStack {
             HStack {
@@ -77,6 +80,7 @@ struct ContentView: View {
                         }
                         .focused($textFieldIsFocused)
                         .onSubmit {
+                            //As long as guessedLetter is not an empty String we can continue, otherwise don't do anything
                             guard guessedLetter != "" else {
                                 return
                             }
@@ -95,6 +99,7 @@ struct ContentView: View {
                 }
             } else {
                 Button(playAgainButtonLabel) {
+                    //If all of the words have been guessed...
                     if currentWordIndex == wordsToGuess.count {
                         currentWordIndex = 0
                         wordsGuessed = 0
@@ -105,7 +110,7 @@ struct ContentView: View {
                     wordToGuess = wordsToGuess[currentWordIndex]
                     revealedWord = "_" + String(repeating: " _", count: wordToGuess.count-1)
                     lettersGuessed = ""
-                    guessesRemaining = Self.maximumGuesses
+                    guessesRemaining = Self.maximumGuesses // becaue maixmumGuesses is static
                     imageName = "flower\(guessesRemaining)"
                     gameStatusMessage = "How Many Guest to Uncover the Hidden Word?"
                     playAgainHidden = true
@@ -121,10 +126,12 @@ struct ContentView: View {
             Image(imageName)
                 .resizable()
                 .scaledToFit()
+                .animation(.easeIn(duration: 0.75), value: imageName)
     }
         .ignoresSafeArea(edges: .bottom)
         .onAppear {
             wordToGuess = wordsToGuess[currentWordIndex]
+            //CREATE A STRING FROM A REPEATING VALUE
             revealedWord = "_" + String(repeating: " _", count: wordToGuess.count-1)
         }
     }
@@ -136,26 +143,34 @@ struct ContentView: View {
         }.joined(separator: " ")
 
     }
-    func updateGamePlay() {
-        //TODO: Redo this with LocalizedStringKey & Inflect
-        gameStatusMessage = "You've Made \(lettersGuessed.count) Guess\(lettersGuessed.count == 1 ? "" : "es")"
+    func updateGamePlay()  {
         if !wordToGuess.contains(guessedLetter) {
             guessesRemaining -= 1
-            imageName = "flower\(guessesRemaining)"
+            //Animate crumbling leaf and play the incorrect sound
+            imageName = "wilt\(guessesRemaining)"
+            playSound(soundName: "incorrect")
+            //Delay change to flower image until after wilt animation is done
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+                imageName = "flower\(guessesRemaining)"
+            }
+        }else {
+            playSound(soundName: "correct")
         }
         
         //When Do We Play Another Word
         if !revealedWord.contains("_") { // Guessed when no "_" in revealWord
+            
             gameStatusMessage = "You Guessed It! It took You \(lettersGuessed.count) Guesses to Guess the word."
             wordsGuessed += 1
             currentWordIndex += 1
             playAgainHidden = false
-            
+            playSound(soundName: "word-guessed")
         } else if guessesRemaining == 0 {
             gameStatusMessage = "so Sorry, You're All out of Guesses"
             wordsMissed += 1
             currentWordIndex += 1
             playAgainHidden = false
+            playSound(soundName: "word-not-guessed")
         }else {// keep guessing
             //TODO: Redo this with LocalizedStringKey & Inflect
             gameStatusMessage = "You've Made \(lettersGuessed.count) Guess\(lettersGuessed.count == 1 ? "" : "es")"
@@ -167,6 +182,22 @@ struct ContentView: View {
         }
             
         guessedLetter = ""
+    }
+    
+    func playSound(soundName: String) {
+        if audioPlayer != nil && audioPlayer.isPlaying {
+            audioPlayer.stop()
+        }
+        guard let soundFile = NSDataAsset(name: soundName) else {
+            print("😡 Could not read file named \(soundName)")
+            return
+        }
+        do {
+            audioPlayer = try AVAudioPlayer(data: soundFile.data)
+            audioPlayer.play()
+        } catch {
+            print("😡 Error: \(error.localizedDescription) creating audioPlayer")
+        }
     }
 
 }
